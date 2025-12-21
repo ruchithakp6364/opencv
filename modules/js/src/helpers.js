@@ -71,6 +71,59 @@ Module['imread'] = function(imageSource) {
     var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     return cv.matFromImageData(imgData);
 };
+/**
+ * Preprocess image data for consistent computer vision operations
+ * Applies contrast enhancement to match browser rendering behavior
+ * @param {cv.Mat} mat - Input grayscale Mat
+ * @param {boolean} applyCLAHE - Whether to apply CLAHE (default: true)
+ * @returns {cv.Mat} - Preprocessed Mat
+ */
+Module['preprocessImageMat'] = function(mat, applyCLAHE = true) {
+    if (mat.channels() !== 1) {
+        throw new Error('preprocessImageMat requires grayscale (single channel) input');
+    }
+    
+    let enhanced = new Module.Mat();
+    
+    if (applyCLAHE && typeof Module.CLAHE !== 'undefined') {
+        // Apply CLAHE for adaptive contrast enhancement
+        let clahe = new Module.CLAHE(2.0, new Module.Size(8, 8));
+        clahe.apply(mat, enhanced);
+        clahe.delete();
+    } else {
+        // Fallback to histogram equalization
+        Module.equalizeHist(mat, enhanced);
+    }
+    
+    return enhanced;
+};
+
+/**
+ * Create Mat from raw image buffer with proper preprocessing
+ * @param {Uint8Array|Uint8ClampedArray} data - Raw pixel data (RGB or RGBA)
+ * @param {number} width - Image width
+ * @param {number} height - Image height  
+ * @param {number} channels - Number of channels (3 for RGB, 4 for RGBA)
+ * @returns {cv.Mat} - Mat in BGR format, ready for OpenCV operations
+ */
+Module['matFromImageBuffer'] = function(data, width, height, channels) {
+    if (channels !== 3 && channels !== 4) {
+        throw new Error('matFromImageBuffer supports only RGB (3) or RGBA (4) channels');
+    }
+    
+    // Create Mat from raw data
+    let matType = channels === 3 ? Module.CV_8UC3 : Module.CV_8UC4;
+    let mat = new Module.Mat(height, width, matType);
+    mat.data.set(data);
+    
+    // Convert RGB(A) to BGR(A) for OpenCV consistency
+    let bgr = new Module.Mat();
+    let colorCode = channels === 3 ? Module.COLOR_RGB2BGR : Module.COLOR_RGBA2BGRA;
+    Module.cvtColor(mat, bgr, colorCode);
+    
+    mat.delete();
+    return bgr;
+};
 
 Module['imshow'] = function(canvasSource, mat) {
     var canvas = null;
